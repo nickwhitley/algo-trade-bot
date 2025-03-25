@@ -85,6 +85,7 @@ def collect_data(pair, granularity, from_date, to_date, api: OandaApi):
         print(f"{pair} {granularity} --> NO DATA SAVED!")
 
 def run_collection(ic: InstrumentCollection, api: OandaApi):
+    print('running data collection...')
     currencies = ['AUD', 'CAD', 'USD', 'EUR', 'JPY', 'GBP', 'NZD', 'CHF']
     granularities = ['H1', 'H4', 'D']
     from_date = '2024-10-01T00:00:00Z'
@@ -95,6 +96,7 @@ def run_collection(ic: InstrumentCollection, api: OandaApi):
             pair = f"{c1}_{c2}"
             if pair in ic.instrument_dict.keys():
                 for g in granularities:
+                    print('running collection for pair...')
                     collect_data(
                         pair,
                         g,

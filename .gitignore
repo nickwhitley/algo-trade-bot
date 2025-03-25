@@ -81,6 +81,7 @@ target/
 
 # keys and stuff
 constants.py
+data/
 
 # IPython
 profile_default/
