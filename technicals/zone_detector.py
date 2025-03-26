@@ -76,6 +76,61 @@ def get_zones_for_price(price, support_levels, resistance_levels, num_of_zones=3
             break
 
     return zones
+
+def attach_zones_to_confirmations(
+    df,
+    window=3,
+    clustering_threshold=0.0050,
+    num_of_zones=3
+):
+    """
+    For each confirmation candle:
+        - Attach relevant support/resistance zones based on past data only
+        - Compute zone-to-stop-loss ratio using second zone
+        - Add 'confirmation_zones', 'zone_sl_ratio', and 'meets_ratio' columns
+    """
+    from copy import deepcopy
+    df['confirmation_zones'] = None
+    df['zone_sl_ratio'] = None
+    df['meets_ratio'] = False
+
+    for i in range(len(df)):
+        if df.at[i, 'setup_stage'] == 'confirmation':
+            past_df = df.iloc[:i]
+            if len(past_df) < window * 2:
+                continue
+
+            support_levels, resistance_levels = find_support_resistance(
+                past_df,
+                price_col='mid_c',
+                high_col='mid_h',
+                low_col='mid_l',
+                window=window,
+                clustering_threshold=clustering_threshold
+            )
+
+            current_price = df.at[i, 'mid_c']
+            current_low = df.at[i, 'mid_l']
+
+            zones = get_zones_for_price(
+                price=current_price,
+                support_levels=support_levels,
+                resistance_levels=resistance_levels,
+                num_of_zones=num_of_zones
+            )
+
+            df.at[i, 'confirmation_zones'] = deepcopy(zones)
+
+            if len(zones) >= 2:
+                zone_top = zones[1][1]  # Top of second zone (resistance)
+                reward = zone_top - current_price
+                risk = current_price - current_low
+
+                if risk > 0:
+                    ratio = reward / risk
+                    df.at[i, 'zone_sl_ratio'] = round(ratio, 3)
+                    df.at[i, 'meets_ratio'] = ratio >= 1.0
+
     
 
 

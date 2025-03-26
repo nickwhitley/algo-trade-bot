@@ -87,9 +87,9 @@ def collect_data(pair, granularity, from_date, to_date, api: OandaApi):
 def run_collection(ic: InstrumentCollection, api: OandaApi):
     print('running data collection...')
     currencies = ['AUD', 'CAD', 'USD', 'EUR', 'JPY', 'GBP', 'NZD', 'CHF']
-    granularities = ['H1', 'H4', 'D']
-    from_date = '2024-10-01T00:00:00Z'
-    to_date = '2025-03-01T00:00:00Z'
+    granularities = ['H4']
+    from_date = '2015-01-01T00:00:00Z'
+    to_date = '2025-01-01T00:00:00Z'
 
     for c1 in currencies:
         for c2 in currencies:
