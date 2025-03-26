@@ -19,7 +19,6 @@ def find_support_resistance(df, price_col='mid_c', high_col='mid_h', low_col='mi
         Tuple[List[float], List[float]]: (support_levels, resistance_levels)
     """
     
-    # Find local minima and maxima
     local_min_idx = argrelextrema(df[low_col].values, np.less_equal, order=window)[0]
     local_max_idx = argrelextrema(df[high_col].values, np.greater_equal, order=window)[0]
 
@@ -42,6 +41,43 @@ def find_support_resistance(df, price_col='mid_c', high_col='mid_h', low_col='mi
     resistance_levels = cluster_levels(raw_resistances)
 
     return support_levels, resistance_levels
+
+def get_zones_for_price(price, support_levels, resistance_levels, num_of_zones=3):
+    """
+    Returns a list of (support, resistance) zones above the given price.
+
+    Args:
+        price (float): Current price.
+        support_levels (list of float): Detected support levels.
+        resistance_levels (list of float): Detected resistance levels.
+        num_of_zones (int): Number of zones to return.
+
+    Returns:
+        List of tuples: [(support1, resistance1), (support2, resistance2), ...]
+    """
+
+    # Sort levels in case they're not already
+    support_levels = sorted(support_levels)
+    resistance_levels = sorted(resistance_levels)
+
+    zones = []
+
+    # Only consider resistance levels above current price
+    res_above = [r for r in resistance_levels if r > price]
+
+    for res in res_above:
+        # Find the closest support level below this resistance
+        possible_supports = [s for s in support_levels if s < res]
+        if possible_supports:
+            support = max(possible_supports)  # closest support below this resistance
+            zones.append((support, res))
+
+        if len(zones) == num_of_zones:
+            break
+
+    return zones
+    
+
 
 def plot_candles_with_levels(fig, df, support_levels, resistance_levels,
                               time_col='time', open_col='mid_o', high_col='mid_h',
