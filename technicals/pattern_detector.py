@@ -2,134 +2,150 @@ import pandas as pd
 import numpy as np
 from scipy.signal import argrelextrema
 
-def bullish_strength(row):
+# def bullish_strength(row):
+#     open_price = row['mid_o']
+#     close_price = row['mid_c']
+#     high = row['mid_h']
+#     low = row['mid_l']
+    
+#     body = close_price - open_price
+#     total_range = high - low
+#     upper_wick = high - max(open_price, close_price)
+#     lower_wick = min(open_price, close_price) - low
+    
+#     if total_range == 0:
+#         return 0  # avoid division by zero
+    
+#     # Relative body size (0 to 1)
+#     body_score = max(body, 0) / total_range
+
+#     # Wick penalty: 1 is clean (no wicks), 0 is all wicks
+#     wick_score = 1 - ((upper_wick + lower_wick) / total_range)
+
+#     # Close near high bonus (closes near the top)
+#     close_to_high_score = (high - close_price) / total_range
+#     close_to_high_score = 1 - min(close_to_high_score, 1)
+
+#     # Weighted total score
+#     total_score = (0.5 * body_score) + (0.3 * wick_score) + (0.2 * close_to_high_score)
+    
+#     return round(total_score, 3)
+
+def bullish_strength_with_context(df, index, lookback=200):
+    row = df.iloc[index]
+    
     open_price = row['mid_o']
     close_price = row['mid_c']
     high = row['mid_h']
     low = row['mid_l']
-    
+
+    # 1. Must be bullish
+    if close_price <= open_price:
+        return 0.0
+
     body = close_price - open_price
     total_range = high - low
-    upper_wick = high - max(open_price, close_price)
-    lower_wick = min(open_price, close_price) - low
-    
-    if total_range == 0:
-        return 0  # avoid division by zero
-    
-    # Relative body size (0 to 1)
-    body_score = max(body, 0) / total_range
 
-    # Wick penalty: 1 is clean (no wicks), 0 is all wicks
-    wick_score = 1 - ((upper_wick + lower_wick) / total_range)
+    #2. Body must make up most of candle
+    if body < (total_range * 0.7):
+        return 0.0
 
-    # Close near high bonus (closes near the top)
-    close_to_high_score = (high - close_price) / total_range
-    close_to_high_score = 1 - min(close_to_high_score, 1)
+    # 3. Relative size vs past lookback of candles
+    start = max(index - lookback, 0)
+    candle_sizes = []
+    for i in range(start, index):
+        row_i = df.iloc[i]
+        body_i = row_i['mid_h'] - row_i['mid_l']
+        candle_sizes.append(body_i)
 
-    # Weighted total score
-    total_score = (0.5 * body_score) + (0.3 * wick_score) + (0.2 * close_to_high_score)
-    
-    return round(total_score, 3)
+    if not candle_sizes:
+        return 0.0
+
+    # Percentile rank of this candle's body size
+    candle_avg = np.mean(candle_sizes)
+    if body >= candle_avg:
+        return 1.0
+    else:
+        return round((body / candle_avg) * 0.9, 3)
 
 def detect_bottom_reversal_setups(
     df,
     strength_col='bullish_strength_score',
-    strength_threshold=0.5,
-    lookahead=35,
-    proximity_pips=0.0050,
-    rolling_window=25
+    strength_threshold=0.7,  # Using > 0 for now
+    lookahead=25,
+    proximity_pips=0.0030,
+    rolling_window=40,
+    breakout_threshold=20  # in pips
 ):
-    """
-    Detects bottom reversal setups using new lows that occur only during downtrends.
-
-    A setup is:
-    1. A bottom candle (lowest in a window, while in_downtrend is True)
-    2. A breakout candle (low + high > zone high)
-    3. A reentry candle (low reenters the zone but never breaks below zone low)
-    4. A strong bullish candle (close near zone high and strength score high)
-
-    Returns:
-        DataFrame with setup_stage column added.
-    """
     df = df.copy().reset_index(drop=True)
     df['setup_stage'] = None
 
-    # Step 1: Find valid bottom candles (new lows during in_downtrend)
+    # Step 1: Bottom detection
     df['is_bottom'] = (
-        (df['mid_l'] == df['mid_l'].rolling(window=rolling_window, min_periods=1).min()) &
+        (df['mid_l'] == df['mid_l'].rolling(window=rolling_window).min()) &
         (df['in_downtrend'] == True)
     )
-    bottom_indexes = df.index[df['is_bottom']].tolist()
+    df.loc[df['is_bottom'], 'setup_stage'] = 'bottom'
 
-    active_zone_low = None
-    active_zone_high = None
-    active_bottom_idx = None
+    # Step 2: Track active zone
+    df['active_zone_low'] = None
+    df['active_zone_high'] = None
 
-    for i in bottom_indexes:
-        bottom_candle = df.iloc[i]
-        new_zone_low = bottom_candle['mid_l']
-        new_zone_high = bottom_candle['mid_h']
+    current_low = None
+    current_high = None
+    last_bottom_idx = None
+    breakout_found = False
+    reentry_found = False
+    confirmation_found = False
 
-        # Invalidate any existing setup if this low is lower than prior zone
-        if active_zone_low is not None and new_zone_low < active_zone_low:
-            active_zone_low = None
-            active_zone_high = None
-            active_bottom_idx = None
+    for i in range(len(df)):
+        if df.at[i, 'is_bottom']:
+            # New setup: reset everything
+            current_low = df.at[i, 'mid_l']
+            current_high = df.at[i, 'mid_h']
+            last_bottom_idx = i
+            breakout_found = False
+            reentry_found = False
+            confirmation_found = False
 
-        # Start tracking new potential setup
-        active_zone_low = new_zone_low
-        active_zone_high = new_zone_high
-        active_bottom_idx = i
+        df.at[i, 'active_zone_low'] = current_low
+        df.at[i, 'active_zone_high'] = current_high
 
-        # Step 2: Look for valid breakout (entire candle above zone)
-        breakout_idx = None
-        for j in range(i + 1, len(df)):
-            row_j = df.iloc[j]
-            if row_j['mid_l'] < active_zone_low:
-                break  # setup invalidated
-            if row_j['mid_l'] > active_zone_high and row_j['mid_h'] > active_zone_high:
-                breakout_idx = j
-                break
-
-        if breakout_idx is None or breakout_idx - i > lookahead:
+        # Skip if setup was invalidated
+        if current_high is None:
             continue
 
-        # Step 3: Reentry into zone without breaking below zone low
-        reentry_idx = None
-        for k in range(breakout_idx + 1, breakout_idx + lookahead):
-            if k >= len(df):
-                break
-            row_k = df.iloc[k]
-            if active_zone_low <= row_k['mid_l'] <= active_zone_high:
-                reentry_idx = k
-                break
-            if row_k['mid_l'] < active_zone_low:
-                break  # reentry invalidated
+        max_allowed_low = current_high + breakout_threshold / 10000.0
 
-        if reentry_idx is None:
+        # Invalidate if price goes too far from zone
+        if breakout_found and df.at[i, 'mid_l'] > max_allowed_low:
+            current_low = None
+            current_high = None
+            last_bottom_idx = None
+            breakout_found = False
+            reentry_found = False
+            confirmation_found = False
+            df.at[i, 'active_zone_low'] = None
+            df.at[i, 'active_zone_high'] = None
             continue
 
-        # Step 4: Strong bullish confirmation near the zone
-        confirmation_found = False
-        for m in range(reentry_idx + 1, reentry_idx + lookahead):
-            if m >= len(df):
-                break
-            row_m = df.iloc[m]
-            if row_m['mid_l'] < active_zone_low:
-                break  # invalidated
-            if row_m[strength_col] >= strength_threshold:
-                if abs(row_m['mid_c'] - active_zone_high) <= proximity_pips:
-                    # Tag each stage
-                    df.at[active_bottom_idx, 'setup_stage'] = 'bottom'
-                    df.at[breakout_idx, 'setup_stage'] = 'breakout'
-                    df.at[reentry_idx, 'setup_stage'] = 'reentry'
-                    df.at[m, 'setup_stage'] = 'confirmation'
-                    confirmation_found = True
-                    break
+        # Step 2: Breakout
+        if not breakout_found and df.at[i, 'mid_l'] > current_high:
+            df.at[i, 'setup_stage'] = 'breakout'
+            breakout_found = True
+            continue  # Reentry can't be on the breakout candle
 
-        if confirmation_found:
-            active_zone_low = None
-            active_zone_high = None
-            active_bottom_idx = None
+        # Step 3: Reentry
+        if breakout_found and not reentry_found:
+            if current_low <= df.at[i, 'mid_l'] <= current_high:
+                df.at[i, 'setup_stage'] = 'reentry'
+                reentry_found = True
+                continue  # Confirmation must come after reentry
+
+        # Step 4: Confirmation
+        if breakout_found and reentry_found and not confirmation_found:
+            if df.at[i, strength_col] > strength_threshold:
+                df.at[i, 'setup_stage'] = 'confirmation'
+                confirmation_found = True
 
     return df
