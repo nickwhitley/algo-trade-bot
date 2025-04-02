@@ -3,8 +3,8 @@ import plotly.graph_objects as go
 
 def apply_downtrend(df):
     df['ma_10'] = df.mid_c.rolling(window=10).mean()
-    df['ma_50'] = df.mid_c.rolling(window=50).mean()
-    df['in_downtrend'] = df['ma_10'] < df['ma_50']
+    df['ma_150'] = df.mid_c.rolling(window=150).mean()
+    df['in_downtrend'] = df['ma_10'] < df['ma_150']
     df.dropna(inplace=True)
 
 def highlight_downtrend_candles(df):

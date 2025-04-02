@@ -42,35 +42,42 @@ def find_support_resistance(df, price_col='mid_c', high_col='mid_h', low_col='mi
 
     return support_levels, resistance_levels
 
-def get_zones_for_price(price, support_levels, resistance_levels, num_of_zones=3):
+def get_zones_for_price(price, support_levels, resistance_levels, num_of_zones=3, min_gap=0.0, min_width=0.0015):
     """
-    Returns a list of (support, resistance) zones above the given price.
+    Returns non-overlapping (support, resistance) zones where the support is above the given price,
+    and there's at least `min_gap` space and `min_width` size.
 
     Args:
         price (float): Current price.
         support_levels (list of float): Detected support levels.
         resistance_levels (list of float): Detected resistance levels.
         num_of_zones (int): Number of zones to return.
+        min_gap (float): Minimum gap between zones.
+        min_width (float): Minimum acceptable width of a zone.
 
     Returns:
         List of tuples: [(support1, resistance1), (support2, resistance2), ...]
     """
 
-    # Sort levels in case they're not already
     support_levels = sorted(support_levels)
     resistance_levels = sorted(resistance_levels)
 
     zones = []
+    last_resistance = price
 
-    # Only consider resistance levels above current price
-    res_above = [r for r in resistance_levels if r > price]
+    sup_above = [s for s in support_levels if s > price]
 
-    for res in res_above:
-        # Find the closest support level below this resistance
-        possible_supports = [s for s in support_levels if s < res]
-        if possible_supports:
-            support = max(possible_supports)  # closest support below this resistance
-            zones.append((support, res))
+    for support in sup_above:
+        if support <= last_resistance + min_gap:
+            continue
+
+        possible_resistances = [r for r in resistance_levels if r > support]
+        for resistance in possible_resistances:
+            width = resistance - support
+            if width >= min_width:
+                zones.append((support, resistance))
+                last_resistance = resistance
+                break  # Move on to the next zone
 
         if len(zones) == num_of_zones:
             break
@@ -130,8 +137,6 @@ def attach_zones_to_confirmations(
                     ratio = reward / risk
                     df.at[i, 'zone_sl_ratio'] = round(ratio, 3)
                     df.at[i, 'meets_ratio'] = ratio >= 1.0
-
-    
 
 
 def plot_candles_with_levels(fig, df, support_levels, resistance_levels,
