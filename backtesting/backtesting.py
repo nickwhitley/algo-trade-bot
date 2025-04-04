@@ -4,6 +4,7 @@ from technicals import zone_detector
 from technicals import pattern_detector
 import datetime as dt
 import pandas as pd
+from tqdm import tqdm
 
 def run_wirly_dirly_test(pairs, granularities, ic: InstrumentCollection, from_date=None, to_date=None):
     ic.load_instruments("./data")
@@ -13,7 +14,7 @@ def run_wirly_dirly_test(pairs, granularities, ic: InstrumentCollection, from_da
             analyze_pair(p, g)
 
 def analyze_pair(pair, granularity):
-    print(f"Analyzing {pair}...")
+    print(f"Analyzing {pair} for {granularity}...")
     df = pd.read_pickle(f"./data/{pair}_{granularity}.pkl")
     df = apply_technicals(df)
 
@@ -21,9 +22,9 @@ def analyze_pair(pair, granularity):
     df['pips'] = None
 
     active_trade = None
-    pip_size = 0.0001  # default for most forex pairs
+    pip_size = 0.01 if pair == 'USD_JPY' else 0.0001
 
-    for i in range(len(df)):
+    for i in tqdm(range(len(df)), desc=f"Analyzing {pair}"):
         row = df.iloc[i]
 
         if active_trade:
@@ -97,13 +98,21 @@ def analyze_pair(pair, granularity):
 
     # Optionally save or return df
     df.to_pickle(f"./backtesting/results/{pair}_{granularity}_analyzed.pkl")
-    print(f"{pair} analysis complete.")
+    tqdm.write(f"{pair} analysis complete.")
 
 def apply_technicals(df):
+    print('applying technicals...')
     df['sTime'] = [dt.datetime.strftime(x, "s%y-%m-%d %H:%M") for x in df.time]
+    print('applying downtrend detection...')
     trend_checker.apply_downtrend(df)
-    df['bullish_strength_score'] = [pattern_detector.bullish_strength_with_context(df, i) for i in range(len(df))]
+    print('applying bullish strength score...')
+    df['bullish_strength_score'] = [ 
+        pattern_detector.bullish_strength_with_context(df, i)
+        for i in tqdm(range(len(df)), desc="Calculating bullish strength")
+    ]
     #need to make this not return a df but add in place
+    print('applying pattern detection...')
     df = pattern_detector.detect_bottom_reversal_setups(df)
+    print('applying zone detection...')
     zone_detector.attach_zones_to_confirmations(df)
     return df

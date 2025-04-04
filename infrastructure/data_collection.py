@@ -49,6 +49,7 @@ def fetch_candles(pair, granularity, from_date: dt.datetime, to_date: dt.datetim
         return None
     
 def collect_data(pair, granularity, from_date, to_date, api: OandaApi):
+    print('collect data called')
     time_step = INCREMENTS[granularity]
     end_date = parser.parse(to_date)
     from_date = parser.parse(from_date)
@@ -87,7 +88,7 @@ def collect_data(pair, granularity, from_date, to_date, api: OandaApi):
 def run_collection(ic: InstrumentCollection, api: OandaApi):
     print('running data collection...')
     currencies = ['AUD', 'CAD', 'USD', 'EUR', 'JPY', 'GBP', 'NZD', 'CHF']
-    granularities = ['H4']
+    granularities = ['H1']
     from_date = '2015-01-01T00:00:00Z'
     to_date = '2025-01-01T00:00:00Z'
 
@@ -96,7 +97,7 @@ def run_collection(ic: InstrumentCollection, api: OandaApi):
             pair = f"{c1}_{c2}"
             if pair in ic.instrument_dict.keys():
                 for g in granularities:
-                    print('running collection for pair...')
+                    print(f'running collection for {pair}...')
                     collect_data(
                         pair,
                         g,
@@ -104,4 +105,6 @@ def run_collection(ic: InstrumentCollection, api: OandaApi):
                         to_date,
                         api
                     )
+            else:
+                print('pair not found in instument collection')
     

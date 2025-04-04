@@ -1,11 +1,18 @@
 import pandas as pd
 import plotly.graph_objects as go
+from tqdm import tqdm
+tqdm.pandas()
+
+def detect_downtrend(row):
+    return row['ma_10'] < row['ma_150']
 
 def apply_downtrend(df):
     df['ma_10'] = df.mid_c.rolling(window=10).mean()
     df['ma_150'] = df.mid_c.rolling(window=150).mean()
-    df['in_downtrend'] = df['ma_10'] < df['ma_150']
     df.dropna(inplace=True)
+
+    # Use tqdm's progress bar here
+    df['in_downtrend'] = df.progress_apply(detect_downtrend, axis=1)
 
 def highlight_downtrend_candles(df):
     fig = go.Figure()
