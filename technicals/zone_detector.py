@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 from scipy.signal import argrelextrema
 import plotly.graph_objects as go
+from tqdm import tqdm
 
 def find_support_resistance(df, price_col='mid_c', high_col='mid_h', low_col='mid_l', window=3, clustering_threshold=0.0050):
     """
@@ -101,7 +102,7 @@ def attach_zones_to_confirmations(
     df['zone_sl_ratio'] = None
     df['meets_ratio'] = False
 
-    for i in range(len(df)):
+    for i in tqdm(range(len(df)), desc="Attaching zones to confirmations"):
         if df.at[i, 'setup_stage'] == 'confirmation':
             past_df = df.iloc[:i]
             if len(past_df) < window * 2:

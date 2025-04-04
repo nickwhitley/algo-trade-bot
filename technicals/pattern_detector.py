@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 from scipy.signal import argrelextrema
+from tqdm import tqdm
 
 # def bullish_strength(row):
 #     open_price = row['mid_o']
@@ -98,7 +99,7 @@ def detect_bottom_reversal_setups(
     reentry_found = False
     confirmation_found = False
 
-    for i in range(len(df)):
+    for i in tqdm(range(len(df)), desc="Detecting bottom reversal"):
         if df.at[i, 'is_bottom']:
             # New setup: reset everything
             current_low = df.at[i, 'mid_l']

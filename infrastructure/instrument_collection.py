@@ -12,14 +12,17 @@ class InstrumentCollection:
         self.api = api
 
     def load_instruments(self, path):
+        print('loading instruments...')
         self.instrument_dict = {}
         file_name = f"{path}/{self.FILENAME}"
 
         if not os.path.exists(file_name):
+            print('could not find instrument.json')
             ins_data = self.api.get_account_instruments()
             self.create_file(ins_data, path)
 
         with open(file_name, 'r') as f:
+            print('reading insturments.json')
             data = json.loads(f.read())
             for k, v in data.items():
                 self.instrument_dict[k] = Instrument.from_api_object(v)
