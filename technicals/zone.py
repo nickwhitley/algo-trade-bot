@@ -4,6 +4,59 @@ from scipy.signal import argrelextrema
 import plotly.graph_objects as go
 from tqdm import tqdm
 
+def apply_zone_exits_and_reentries(df, zone_threshold_pips, pair='EUR_USD'):
+    # Convert pip threshold to price threshold
+    pip_divisor = 100 if 'JPY' in pair else 10000
+    threshold = zone_threshold_pips / pip_divisor
+
+    if 'setup_stage' not in df.columns:
+        df['setup_stage'] = None
+
+    active_zone_low = None
+    active_zone_high = None
+    bottom_index = None
+    exited = False
+
+    for i in range(len(df)):
+        row = df.iloc[i]
+
+        # Step 1: Handle new bottom — reset tracking
+        if row.get('is_bottom', False):
+            active_zone_low, active_zone_high = row['zone'] if row['zone'] else (None, None)
+            bottom_index = i
+            exited = False
+            continue
+
+        if active_zone_low is None or active_zone_high is None:
+            continue  # no active zone to track
+
+        # Step 2: Exit detection — price goes above zone high completely
+        if not exited and row['mid_l'] > active_zone_high:
+            index = df.index[i]
+            df.loc[index, 'setup_stage'] = 'exit'
+            exited = True
+            continue
+
+        # Step 3: Threshold breach — abandon setup if price goes too far
+        if exited and row['mid_h'] > active_zone_high + threshold:
+            # Clear zone and setup state
+            active_zone_low = None
+            active_zone_high = None
+            bottom_index = None
+            exited = False
+            continue
+
+        # Step 4: Reentry detection — wick touches or enters zone
+        if exited and row['mid_l'] <= active_zone_high and row['mid_h'] >= active_zone_low:
+            index = df.index[i]
+            df.loc[index, 'setup_stage'] = 'reentry'
+            # exited = False  # Uncomment if setup should be done after reentry
+            # active_zone_low = None
+            # active_zone_high = None
+            # bottom_index = None
+
+
+
 def find_support_resistance(df, price_col='mid_c', high_col='mid_h', low_col='mid_l', window=3, clustering_threshold=0.0050):
     """
     Identifies support and resistance levels in candlestick data.
@@ -87,57 +140,64 @@ def get_zones_for_price(price, support_levels, resistance_levels, num_of_zones=3
 
 def attach_zones_to_confirmations(
     df,
+    index,
     window=3,
     clustering_threshold=0.0050,
     num_of_zones=3
 ):
     """
-    For each confirmation candle:
-        - Attach relevant support/resistance zones based on past data only
+    At a single row index, if it's a confirmation candle:
+        - Attach relevant support/resistance zones
         - Compute zone-to-stop-loss ratio using second zone
-        - Add 'confirmation_zones', 'zone_sl_ratio', and 'meets_ratio' columns
+        - Set 'confirmation_zones', 'zone_sl_ratio', and 'meets_ratio' on the row
     """
     from copy import deepcopy
-    df['confirmation_zones'] = None
-    df['zone_sl_ratio'] = None
-    df['meets_ratio'] = False
 
-    for i in tqdm(range(len(df)), desc="Attaching zones to confirmations"):
-        if df.at[i, 'setup_stage'] == 'confirmation':
-            past_df = df.iloc[:i]
-            if len(past_df) < window * 2:
-                continue
+    # Ensure required columns exist
+    for col in ['confirmation_zones', 'zone_sl_ratio', 'meets_ratio']:
+        if col not in df.columns:
+            df[col] = None if col != 'meets_ratio' else False
 
-            support_levels, resistance_levels = find_support_resistance(
-                past_df,
-                price_col='mid_c',
-                high_col='mid_h',
-                low_col='mid_l',
-                window=window,
-                clustering_threshold=clustering_threshold
-            )
+    # Only process if this is a confirmation candle
+    if df.at[index, 'setup_stage'] != 'confirmation':
+        return
 
-            current_price = df.at[i, 'mid_c']
-            current_low = df.at[i, 'mid_l']
+    past_df = df.iloc[:index]
+    if len(past_df) < window * 2:
+        return
 
-            zones = get_zones_for_price(
-                price=current_price,
-                support_levels=support_levels,
-                resistance_levels=resistance_levels,
-                num_of_zones=num_of_zones
-            )
+    # Get support/resistance from past data
+    support_levels, resistance_levels = find_support_resistance(
+        past_df,
+        price_col='mid_c',
+        high_col='mid_h',
+        low_col='mid_l',
+        window=window,
+        clustering_threshold=clustering_threshold
+    )
 
-            df.at[i, 'confirmation_zones'] = deepcopy(zones)
+    current_price = df.at[index, 'mid_c']
+    current_low = df.at[index, 'mid_l']
 
-            if len(zones) >= 2:
-                zone_top = zones[1][1]  # Top of second zone (resistance)
-                reward = zone_top - current_price
-                risk = current_price - current_low
+    zones = get_zones_for_price(
+        price=current_price,
+        support_levels=support_levels,
+        resistance_levels=resistance_levels,
+        num_of_zones=num_of_zones
+    )
 
-                if risk > 0:
-                    ratio = reward / risk
-                    df.at[i, 'zone_sl_ratio'] = round(ratio, 3)
-                    df.at[i, 'meets_ratio'] = ratio >= 1.0
+    df.at[index, 'confirmation_zones'] = deepcopy(zones)
+
+    # Calculate reward:risk ratio if we have enough zones
+    if len(zones) >= 2:
+        zone_top = zones[1][1]  # Top of second resistance zone
+        reward = zone_top - current_price
+        risk = current_price - current_low
+
+        if risk > 0:
+            ratio = reward / risk
+            df.at[index, 'zone_sl_ratio'] = round(ratio, 3)
+            df.at[index, 'meets_ratio'] = ratio >= 1.0
 
 
 def plot_candles_with_levels(fig, df, support_levels, resistance_levels,
