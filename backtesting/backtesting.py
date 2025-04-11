@@ -1,10 +1,11 @@
 from infrastructure.instrument_collection import InstrumentCollection
-from technicals import trend_checker
-from technicals import zone_detector
-from technicals import pattern_detector
+from technicals import trend
+from technicals import zone
+from technicals import pattern
 import datetime as dt
 import pandas as pd
 from tqdm import tqdm
+import psutil
 
 def run_wirly_dirly_test(pairs, granularities, ic: InstrumentCollection, from_date=None, to_date=None):
     ic.load_instruments("./data")
@@ -16,7 +17,7 @@ def run_wirly_dirly_test(pairs, granularities, ic: InstrumentCollection, from_da
 def analyze_pair(pair, granularity):
     print(f"Analyzing {pair} for {granularity}...")
     df = pd.read_pickle(f"./data/{pair}_{granularity}.pkl")
-    df = apply_technicals(df)
+    df = apply_technicals(df, pair)
 
     df['trade'] = None
     df['pips'] = None
@@ -100,19 +101,22 @@ def analyze_pair(pair, granularity):
     df.to_pickle(f"./backtesting/results/{pair}_{granularity}_analyzed.pkl")
     tqdm.write(f"{pair} analysis complete.")
 
-def apply_technicals(df):
-    print('applying technicals...')
-    df['sTime'] = [dt.datetime.strftime(x, "s%y-%m-%d %H:%M") for x in df.time]
-    print('applying downtrend detection...')
-    trend_checker.apply_downtrend(df)
-    print('applying bullish strength score...')
-    df['bullish_strength_score'] = [ 
-        pattern_detector.bullish_strength_with_context(df, i)
-        for i in tqdm(range(len(df)), desc="Calculating bullish strength")
-    ]
-    #need to make this not return a df but add in place
-    print('applying pattern detection...')
-    df = pattern_detector.detect_bottom_reversal_setups(df)
-    print('applying zone detection...')
-    zone_detector.attach_zones_to_confirmations(df)
+def apply_technicals(df, pair):
+    trend.apply_downtrend(df)
+    
+
+    progress = tqdm(range(len(df)), desc="Applying technicals")
+
+    for i in progress:
+        trend.apply_downtrend(df, i)
+        pattern.bullish_strength_with_context(df, i)
+        pattern.detect_bottom_reversal_setups(df, df.iloc[i], pair)
+        zone.attach_zones_to_confirmations(df, i)
+
+        # ✅ Update CPU + MEM only every 1000 iterations or on the last
+        if i % 1000 == 0 or i == len(df) - 1:
+            cpu = psutil.cpu_percent(interval=0)
+            mem = psutil.virtual_memory().percent
+            progress.set_postfix(cpu=f"{cpu:.1f}%", mem=f"{mem:.1f}%")
+
     return df

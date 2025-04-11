@@ -80,6 +80,7 @@ def collect_data(pair, granularity, from_date, to_date, api: OandaApi):
 
     if len(candle_dfs) > 0:
         final_df = pd.concat(candle_dfs)
+        final_df['sTime'] = [dt.datetime.strftime(x, "s%y-%m-%d %H:%M") for x in final_df.time]
         save_file(final_df, file_prefix, granularity, pair)
         print(f"{pair} {granularity} --> DATA SAVED!")
     else:
