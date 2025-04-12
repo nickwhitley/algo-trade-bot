@@ -86,26 +86,27 @@ def collect_data(pair, granularity, from_date, to_date, api: OandaApi):
     else:
         print(f"{pair} {granularity} --> NO DATA SAVED!")
 
-def run_collection(ic: InstrumentCollection, api: OandaApi):
+def run_collection(ic: InstrumentCollection, api: OandaApi, granularities):
     print('running data collection...')
-    currencies = ['AUD', 'CAD', 'USD', 'EUR', 'JPY', 'GBP', 'NZD', 'CHF']
-    granularities = ['H1']
+    # currencies = ['AUD', 'CAD', 'USD', 'EUR', 'JPY', 'GBP', 'NZD', 'CHF']
+    pairs = ["AUD_USD", "EUR_USD", "GBP_USD", "USD_CHF", "USD_JPY", "NZD_USD", "USD_CAD"]
     from_date = '2015-01-01T00:00:00Z'
     to_date = '2025-01-01T00:00:00Z'
 
-    for c1 in currencies:
-        for c2 in currencies:
-            pair = f"{c1}_{c2}"
-            if pair in ic.instrument_dict.keys():
-                for g in granularities:
-                    print(f'running collection for {pair}...')
-                    collect_data(
-                        pair,
-                        g,
-                        from_date,
-                        to_date,
-                        api
-                    )
-            else:
-                print('pair not found in instument collection')
+    # for c1 in currencies:
+    #     for c2 in currencies:
+    #         pair = f"{c1}_{c2}"
+    for pair in pairs:
+        if pair in ic.instrument_dict.keys():
+            for g in granularities:
+                print(f'running collection for {pair}_{g}...')
+                collect_data(
+                    pair,
+                    g,
+                    from_date,
+                    to_date,
+                    api
+                )
+        else:
+            print('pair not found in instument collection')
     

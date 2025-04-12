@@ -1,29 +1,19 @@
-from infrastructure.instrument_collection import InstrumentCollection
-from infrastructure import trade_simulation
+
+import pandas as pd
+import datetime as dt
 from technicals import trend
 from technicals import zone
 from technicals import pattern
 from technicals import bottom
 from technicals import candle
-import datetime as dt
-import pandas as pd
-from tqdm import tqdm
-import psutil
 
-def run_wirly_dirly_test(pairs, granularities, ic: InstrumentCollection, from_date=None, to_date=None):
-    ic.load_instruments("./data")
+def apply_technicals(df, pair):
 
-    config = {
-        "sl_pips": 50,
-        "tp_to_sl_ratio": 1,
-        "bottom_zone_lookback": 20,
-        "bottom_to_confirmation_spacing": 6,
-        "confirmation_wick_ratio": 0.7 
-    }
-
-    for p in pairs:
-        for g in granularities:
-            analyze_pair(p, g, config)
+    df['sTime'] = [dt.datetime.strftime(x, "s%y-%m-%d %H:%M") for x in df.time]
+    trend.apply_downtrend(df)
+    bottom.apply_bottom_zones(df)
+    zone.apply_zone_exits_and_reentries(df, 50, pair)
+    candle.detect_strong_bullish(df)
 
 def analyze_pair(pair, granularity, config):
     print(f"Analyzing {pair} for {granularity}...")
@@ -38,7 +28,7 @@ def analyze_pair(pair, granularity, config):
     if df.empty:
         raise ValueError("Filtered DataFrame is empty — check your date range or data source.")
 
-    # Initialize trade tracking columns
+
     df['trade'] = None
     df['entry_price'] = None
     df['stop_loss'] = None
@@ -50,8 +40,8 @@ def analyze_pair(pair, granularity, config):
     for i in range(len(df)):
         row = df.iloc[i]
 
-        # Entry condition: confirmation candle after full setup
-        if row['setup_stage'] == 'confirmation' and row['strong_bullish']:
+        # Check for new confirmation candle to enter trade
+        if row['setup_stage'] == 'confirmation':
             zone = row.get('zone')
             if not isinstance(zone, tuple) or len(zone) != 2:
                 continue
@@ -74,7 +64,7 @@ def analyze_pair(pair, granularity, config):
             df.at[df.index[i], 'take_profit'] = take_profit
             continue
 
-        # Trade management: check for SL or TP
+        # If trade is active, check for SL/TP hit
         if active_trade:
             high = row['mid_h']
             low = row['mid_l']
@@ -91,13 +81,3 @@ def analyze_pair(pair, granularity, config):
 
     df.to_pickle(f"./backtesting/results/{pair}_{granularity}_analyzed.pkl")
     print(f"{pair} analysis complete.")
-
-
-def apply_technicals(df, pair):
-
-    df['sTime'] = [dt.datetime.strftime(x, "s%y-%m-%d %H:%M") for x in df.time]
-    trend.apply_downtrend(df)
-    bottom.apply_bottom_zones(df)
-    zone.apply_zone_exits_and_reentries(df, 50, pair)
-    candle.detect_strong_bullish(df)
-    candle.mark_confirmations(df)
