@@ -12,8 +12,10 @@ if __name__ == '__main__':
     
     api = OandaApi()
     instument_collection = InstrumentCollection(api)
-    pairs = ["AUD_USD", "EUR_USD", "GBP_USD", "USD_CHF", "USD_JPY", "NZD_USD", "USD_CAD"]
-    granularities = ['M5', 'M30', 'H1', 'H4']
+    # pairs = ["AUD_USD", "EUR_USD", "GBP_USD", "USD_CHF", "USD_JPY", "NZD_USD", "USD_CAD"]
+    pairs = ["EUR_USD"]
+    # granularities = ['M5', 'M30', 'H1', 'H4']
+    granularities = ['M5']
 
     instument_collection.load_instruments('./data')
     # data_collection.run_collection(instument_collection, api, granularities)

@@ -43,7 +43,7 @@ def apply_layout(df, fig):
 
     fig.update_xaxes(
         gridcolor="#1f292f",
-        rangeslider=dict(visible=True),
+        # rangeslider=dict(visible=True),
         nticks=5
     )
 
@@ -89,10 +89,10 @@ def highlight_bottom_zones(fig, df, color='yellow'):
         low=bottoms.mid_l,
         close=bottoms.mid_c,
         line=dict(width=1), opacity=1,
-        increasing_fillcolor='yellow', 
-        decreasing_fillcolor='yellow',
-        increasing_line_color='yellow',
-        decreasing_line_color='yellow'
+        increasing_fillcolor=color, 
+        decreasing_fillcolor=color,
+        increasing_line_color=color,
+        decreasing_line_color=color
     ))
 
 def highlight_exits_and_reentries(fig, df, exit_color='red', reentry_color='green'):

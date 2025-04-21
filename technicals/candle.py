@@ -27,9 +27,9 @@ def detect_strong_bullish(df, lookback=20, range_multiplier=1.5, wick_ratio_thre
     df['strong_bullish'] = df['range_ok'] & df['wick_ok'] & df['close_near_high']
 
     # Set 'setup_stage' to 'confirmation' if previous candle was 'reentry' and current is strong bullish
-    for i in range(1, len(df)):
-        if df.at[df.index[i], 'strong_bullish'] and df.at[df.index[i - 1], 'setup_stage'] == 'reentry':
-            df.at[df.index[i], 'setup_stage'] = 'confirmation'
+    # for i in range(1, len(df)):
+    #     if df.at[df.index[i], 'strong_bullish'] and df.at[df.index[i - 1], 'setup_stage'] == 'reentry':
+    #         df.at[df.index[i], 'setup_stage'] = 'confirmation'
 
 def mark_confirmations(df, window=10):
     """
