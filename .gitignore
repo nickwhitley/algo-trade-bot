@@ -82,6 +82,7 @@ target/
 # keys and stuff
 constants.py
 data/
+backtesting/results/
 
 # IPython
 profile_default/
