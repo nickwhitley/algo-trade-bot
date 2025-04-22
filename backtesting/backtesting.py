@@ -179,7 +179,7 @@ def analyze_pair(pair, granularity, config, from_date=None, to_date=None):
                 df.loc[i, 'stage'] = current_stage
                 continue
 
-    df.reset_index()
+    df.reset_index(inplace=True)
     df.to_pickle(f"./backtesting/results/{pair}_{granularity}_analyzed.pkl")
     print(f"{pair} analysis complete.")
 
