@@ -14,15 +14,16 @@ def run_wirly_dirly_test(pairs, granularities, ic: InstrumentCollection, from_da
     ic.load_instruments("./data")
 
     config = {
-        "sl_pips": 5,
-        "tp_to_sl_ratio": 3,
+        "sl_pips": 0,
+        "tp_to_sl_ratio": 0.5,
         "bottom_zone_lookback": 60,
         "bottom_to_confirmation_spacing": 6,
         "confirmation_wick_ratio": 0.7,
-        "exit_threshold": 55
+        "exit_threshold": 55,
+        "reentry_to_confirm_max_space": 15
     }
     
-    from_date = "2022-01-01T00:00:00Z"
+    from_date = "2020-01-01T00:00:00Z"
     to_date = "2025-01-01T00:00:00Z"
 
     for p in pairs:
@@ -56,6 +57,7 @@ def analyze_pair(pair, granularity, config, from_date=None, to_date=None):
     active_bottom_zone_high = None
     active_bottom_index = None
     current_stage = None
+    reentry_index = None
     exit_threshold_price = None
 
     for i in range(len(df)):
@@ -65,11 +67,19 @@ def analyze_pair(pair, granularity, config, from_date=None, to_date=None):
 
         if active_trade is None:
             # locate bottom
-            if df.loc[i, 'is_bottom'] == True:
+            if df.loc[i, 'is_bottom'] and df.loc[i, 'in_downtrend']:
                 active_bottom_zone_low = df.loc[i, 'mid_l']
                 active_bottom_zone_high = df.loc[i, 'mid_h']
                 active_bottom_index = i
                 current_stage = 'bottom'
+                df.loc[i, 'stage'] = current_stage
+                continue
+
+            elif df.loc[i, 'is_bottom']:
+                active_bottom_zone_low = None
+                active_bottom_zone_high = None
+                active_bottom_index = None
+                current_stage = None
                 df.loc[i, 'stage'] = current_stage
                 continue
 
@@ -96,11 +106,30 @@ def analyze_pair(pair, granularity, config, from_date=None, to_date=None):
 
                 if price_within_zone:
                     current_stage = 'reentry'
+                    reentry_index = i
                     df.loc[i, 'stage'] = current_stage
                     continue
 
             if current_stage == 'reentry':
             # detect confirmation candle (entry candle)
+                if i > (reentry_index + config['reentry_to_confirm_max_space']):
+                    active_bottom_zone_low = None
+                    active_bottom_zone_high = None
+                    active_bottom_index = None
+                    current_stage = None
+                    reentry_index = None
+                    exit_threshold_price = None
+                    continue
+
+                # if df.loc[i, 'mid_l'] > exit_threshold_price:
+                #     active_bottom_zone_low = None
+                #     active_bottom_zone_high = None
+                #     active_bottom_index = None
+                #     current_stage = None
+                #     reentry_index = None
+                #     exit_threshold_price = None
+                #     continue
+
                 if df.loc[i, 'strong_bullish'] == True:
                     current_stage = 'confirmation'
                     df.loc[i, 'stage'] = current_stage
