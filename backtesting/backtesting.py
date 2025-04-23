@@ -59,6 +59,8 @@ def analyze_pair(pair, granularity, config, from_date=None, to_date=None):
     current_stage = None
     reentry_index = None
     exit_threshold_price = None
+    trailing_stop_pips = None
+    trailing_active = False
 
     for i in range(len(df)):
         if len(df) >= 100 and i % (len(df) // 100) == 0:
@@ -152,20 +154,8 @@ def analyze_pair(pair, granularity, config, from_date=None, to_date=None):
         if active_trade is not None:
             current_stage = 'in_trade'
             df.loc[i, 'stage'] = current_stage
-            # now we look for price to hit sl or tp and set active trade to None and mark results
-            if df.loc[i, 'mid_h'] >= active_trade['take_profit']:
-                df.loc[i, 'trade'] = 'closed - tp'
-                df.loc[i, 'pips'] = (active_trade['take_profit'] - active_trade['entry_price']) * pip_divisor
-                df.loc[i, 'rows_since_entry'] = i - active_trade['entry_idx']
-                active_trade = None
-                active_bottom_zone_low = None
-                active_bottom_zone_high = None
-                active_bottom_index = None
-                current_stage = None
-                exit_threshold_price = None
-                df.loc[i, 'stage'] = current_stage
-                continue
 
+            # SL check — always comes first
             if df.loc[i, 'mid_l'] <= active_trade['stop_loss']:
                 df.loc[i, 'trade'] = 'closed - sl'
                 df.loc[i, 'pips'] = (active_trade['stop_loss'] - active_trade['entry_price']) * pip_divisor
@@ -176,8 +166,25 @@ def analyze_pair(pair, granularity, config, from_date=None, to_date=None):
                 active_bottom_index = None
                 current_stage = None
                 exit_threshold_price = None
+                trailing_active = False
+                trailing_stop_pips = None
                 df.loc[i, 'stage'] = current_stage
                 continue
+
+            # TP check — initialize trailing stop if not active
+            if df.loc[i, 'mid_h'] >= active_trade['take_profit']:
+                if not trailing_active:
+                    trailing_active = True
+                    trailing_distance_pips = (active_trade['take_profit'] - active_trade['entry_price']) * pip_divisor
+                    df.loc[i, 'stop_loss'] = df.loc[i, 'mid_c'] - (trailing_distance_pips / pip_divisor)
+                else:
+                    # Trailing stop logic
+                    new_stop = df.loc[i, 'mid_c'] - (trailing_distance_pips / pip_divisor)
+                    if new_stop > active_trade['stop_loss']:
+                        active_trade['stop_loss'] = new_stop
+                        df.loc[i, 'stop_loss'] = new_stop
+
+            
 
     df.reset_index(inplace=True)
     df.to_pickle(f"./backtesting/results/{pair}_{granularity}_analyzed.pkl")
